@@ -69,7 +69,7 @@ Options parse_arguments(int argc, char **argv) {
 }
 void print_help() {
     printf("Usage: https-survey <domain>\n");
-    printf("Example: https-survey google.com\n");
+    printf("Example: https-survey example.com\n");
 }
 int is_network_available() {
     struct hostent *host = gethostbyname("google.com");
