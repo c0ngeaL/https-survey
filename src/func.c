@@ -4,7 +4,32 @@
 #include <string.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/x509v3.h>
+void print_ciphers_from_stack(STACK_OF(SSL_CIPHER) *ciphers) {
+    if ( !ciphers) {
+        fprintf(stderr, "Cipher stack is empty\n");
+        return;
+    }
+    const int count = sk_SSL_CIPHER_num(ciphers);
+    if (count <= 0) {
+        printf("No ciphers available!\n");
+        return;
+    }
+
+    printf("\nAvailable ciphers (%d):\n", count);
+    printf("%-45s | %-8s | %-15s\n", "Cipher Name", "Bits", "Protocol");
+    for (int i = 0; i < count; i++) {
+        const SSL_CIPHER* cipher = sk_SSL_CIPHER_value(ciphers, i);
+        if (cipher) {
+            printf("%-45s | %-8d | %-15s\n",
+                     SSL_CIPHER_get_name(cipher),
+                   SSL_CIPHER_get_bits(cipher, NULL),
+                   SSL_CIPHER_get_version(cipher),
+                   SSL_CIPHER_get_auth_nid(cipher) == NID_auth_rsa ? "RSA" : "Other");
+        }
+    }
+}
 //this for serial number for x509
 void print_hex(const unsigned char *data, size_t len) {
     for (size_t i = 0; i < len; i++) {
@@ -65,6 +90,10 @@ TLSCheckResult check_tls_server(const char *host, int port) {
     SSL_CTX *ctx = NULL;
     SSL *ssl = NULL;
     BIO *bio = NULL;
+    if (ssl) {
+        result.ciphers = SSL_get_ciphers(ssl);
+        result.cert = SSL_get_peer_certificate(ssl);
+    }
 
     const int protocols[] = {
         SSL2_VERSION,
@@ -107,7 +136,10 @@ TLSCheckResult check_tls_server(const char *host, int port) {
             SSL_CTX_free(ctx);
             continue;
         }
-
+        BIO_get_ssl(bio, &result.ssl);
+        if (result.ssl) {
+            result.ciphers = SSL_get_ciphers(result.ssl);
+            result.cert = SSL_get_peer_certificate(result.ssl);
         switch (protocols[i]) {
             case SSL2_VERSION: result.protocol_support.sslv2 = 1; break;
             case SSL3_VERSION: result.protocol_support.sslv3 = 1; break;
@@ -115,6 +147,8 @@ TLSCheckResult check_tls_server(const char *host, int port) {
             case TLS1_1_VERSION: result.protocol_support.tlsv1_1 = 1; break;
             case TLS1_2_VERSION: result.protocol_support.tlsv1_2 = 1; break;
             case TLS1_3_VERSION: result.protocol_support.tlsv1_3 = 1; break;
+        }
+        break;
         }
 
         BIO_get_ssl(bio, &ssl);
