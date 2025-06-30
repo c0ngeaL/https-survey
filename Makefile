@@ -12,7 +12,7 @@ else
   SSL_H := $(shell find /usr/include /usr/local/include -name openssl/ssl.h 2>/dev/null | head -n1)
   ifneq ($(SSL_H),)
     CFLAGS += -I$(dir $(SSL_H))/..
-    LDFLAGS += -lssl -lcrypto
+    LDFLAGS += -lssl -lcrypto -lresolv
   else
     $(error "OpenSSL not found!")
   endif
