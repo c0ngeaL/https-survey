@@ -14,11 +14,13 @@ void print_ciphers_from_stack(STACK_OF(SSL_CIPHER) *ciphers) {
     const int count = sk_SSL_CIPHER_num(ciphers);
     if (count <= 0) {
         printf("No ciphers available!\n");
+        sk_SSL_CIPHER_free(ciphers);
         return;
     }
 
     printf("\nAvailable ciphers (%d):\n", count);
     printf("%-45s | %-8s | %-15s\n", "Cipher Name", "Bits", "Protocol");
+    printf("\n");
     for (int i = 0; i < count; i++) {
         const SSL_CIPHER* cipher = sk_SSL_CIPHER_value(ciphers, i);
         if (cipher) {
@@ -83,17 +85,19 @@ void cleanup_openssl() {
     EVP_cleanup();
 }
 
-TLSCheckResult check_tls_server(const char *host, int port) {
-    TLSCheckResult result = {0};
-    result.params.host = host;
-    result.params.port = port;
+void check_tls_server(const char *host, int port, TLSCheckResult *result) {
+    const time_t start_time = time(NULL);
+    const int TIMEOUT_SEC = 10;
+    if (!result) return;
+
+    // Initialize the result structure
+    memset(result, 0, sizeof(TLSCheckResult));
+    result->params.host = host;
+    result->params.port = port;
+
     SSL_CTX *ctx = NULL;
     SSL *ssl = NULL;
     BIO *bio = NULL;
-    if (ssl) {
-        result.ciphers = SSL_get_ciphers(ssl);
-        result.cert = SSL_get_peer_certificate(ssl);
-    }
 
     const int protocols[] = {
         SSL2_VERSION,
@@ -104,6 +108,7 @@ TLSCheckResult check_tls_server(const char *host, int port) {
         TLS1_3_VERSION
     };
 
+    // Rest of the function remains structurally the same, just changing result access
     for (size_t i = 0; i < sizeof(protocols)/sizeof(protocols[0]); i++) {
         ctx = SSL_CTX_new(SSLv23_method());
         if (!ctx) continue;
@@ -130,36 +135,44 @@ TLSCheckResult check_tls_server(const char *host, int port) {
         char port_str[16];
         snprintf(port_str, sizeof(port_str), "%d", port);
         BIO_set_conn_port(bio, port_str);
+        if (time(NULL) - start_time > TIMEOUT_SEC) {
+            result->error = "Connection timeout";
+            break;
+        }
 
         if (BIO_do_connect(bio) <= 0) {
             BIO_free_all(bio);
             SSL_CTX_free(ctx);
             continue;
         }
-        BIO_get_ssl(bio, &result.ssl);
-        if (result.ssl) {
-            result.ciphers = SSL_get_ciphers(result.ssl);
-            result.cert = SSL_get_peer_certificate(result.ssl);
-        switch (protocols[i]) {
-            case SSL2_VERSION: result.protocol_support.sslv2 = 1; break;
-            case SSL3_VERSION: result.protocol_support.sslv3 = 1; break;
-            case TLS1_VERSION: result.protocol_support.tlsv1 = 1; break;
-            case TLS1_1_VERSION: result.protocol_support.tlsv1_1 = 1; break;
-            case TLS1_2_VERSION: result.protocol_support.tlsv1_2 = 1; break;
-            case TLS1_3_VERSION: result.protocol_support.tlsv1_3 = 1; break;
-        }
-        break;
-        }
 
         BIO_get_ssl(bio, &ssl);
         if (ssl) {
-            result.cert = SSL_get_peer_certificate(ssl);
+                if (SSL_do_handshake(ssl) <= 0) {
+                    fprintf(stderr, "Handshake failed for %s\n", host);
+                    BIO_free_all(bio);
+                    SSL_CTX_free(ctx);
+                    continue;
+                }
+                   STACK_OF(SSL_CIPHER) *ciphers = SSL_get1_supported_ciphers(ssl);
+                result->ciphers = ciphers;
+                result->cert = SSL_get_peer_certificate(ssl);
+
+
+            switch (protocols[i]) {
+                case SSL2_VERSION: result->protocol_support.sslv2 = 1; break;
+                case SSL3_VERSION: result->protocol_support.sslv3 = 1; break;
+                case TLS1_VERSION: result->protocol_support.tlsv1 = 1; break;
+                case TLS1_1_VERSION: result->protocol_support.tlsv1_1 = 1; break;
+                case TLS1_2_VERSION: result->protocol_support.tlsv1_2 = 1; break;
+                case TLS1_3_VERSION: result->protocol_support.tlsv1_3 = 1; break;
+            }
+
+            result->ssl = ssl;
+            break;
         }
 
         BIO_free_all(bio);
         SSL_CTX_free(ctx);
     }
-
-    return result;
 }
-
