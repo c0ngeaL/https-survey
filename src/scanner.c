@@ -38,30 +38,27 @@ int is_valid_domain(const char *domain) {
     return 1;
 }
 
-Options* parse_arguments(int argc, char **argv) {
-    Options *options = calloc(1, sizeof(Options));
-    if (!options) {
-        fprintf(stderr, "Memory allocation failed\n");
-        exit(EXIT_FAILURE);
-    }
+int parse_arguments(Options *options, int argc, char **argv) {
+    if (!options) return -1;
+
+    memset(options, 0, sizeof(Options));
 
     static struct option long_options[] = {
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0}
     };
+
     int opt;
     while ((opt = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
         switch (opt) {
             case 'h':
                 options->show_help = 1;
-                return options;
+                return 0;
             case '?':
-                free(options);
-                exit(EXIT_FAILURE);
+                return -1;
             default:
                 fprintf(stderr, "Unexpected error in option processing\n");
-                free(options);
-                exit(EXIT_FAILURE);
+                return -1;
         }
     }
 
@@ -70,20 +67,17 @@ Options* parse_arguments(int argc, char **argv) {
 
         if (options->count >= MAX_DOMAINS) {
             fprintf(stderr, "Too many domains (max %d)\n", MAX_DOMAINS);
-            free(options);
-            exit(EXIT_FAILURE);
+            return -1;
         }
 
         if (strlen(argv[i]) > MAX_DOMAIN_LEN) {
             fprintf(stderr, "Domain too long (max %d chars)\n", MAX_DOMAIN_LEN);
-            free(options);
-            exit(EXIT_FAILURE);
+            return -1;
         }
 
         if (!is_valid_domain(argv[i])) {
             fprintf(stderr, "Invalid domain '%s'\n", argv[i]);
-            free(options);
-            exit(EXIT_FAILURE);
+            return -1;
         }
 
         strncpy(options->domains[options->count], argv[i], MAX_DOMAIN_LEN);
@@ -91,9 +85,8 @@ Options* parse_arguments(int argc, char **argv) {
         options->count++;
     }
 
-    return options;
+    return 0;
 }
-
 void print_help(const char *program_name) {
     printf("Usage: %s <domain>\n", program_name);
     printf("Example: %s google.com\n", program_name);
@@ -101,7 +94,6 @@ void print_help(const char *program_name) {
 
 int is_network_available() {
     struct addrinfo hints = {0}, *result = NULL;
-
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     int ret = getaddrinfo("google.com", "80", &hints, &result);
@@ -114,31 +106,42 @@ int is_network_available() {
 }
 
 int main(int argc, char **argv) {
-    Options *options = parse_arguments(argc, argv);
-    if (options->show_help || argc < 2) {
+    Options options;
+    int ret_code;
+
+    if ((ret_code = parse_arguments(&options, argc, argv)) != 0) {
+        return ret_code < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+    }
+
+    if (options.show_help || argc < 2) {
         print_help(argv[0]);
-        free(options);
         return EXIT_SUCCESS;
     }
 
     if (!is_network_available()) {
         fprintf(stderr, "No internet connection.\n");
-        free(options);
         return EXIT_FAILURE;
     }
 
     init_openssl();
 
-    for (int i = 0; i < options->count; i++) {
-        TLSCheckResult result = check_tls_server(options->domains[i], 443);
+    for (int i = 0; i < options.count; i++) {
+        TLSCheckResult result;
+        check_tls_server(options.domains[i], 443, &result);
+
         printf("\nTLS/SSL scan, standby:\n");
-        printf("%-30s ║\n", options->domains[i]);
+        printf("%-30s\n", options.domains[i]);
         print_protocol_support(&result.protocol_support);
-       print_ciphers_from_stack(result.ciphers);
+        print_ciphers_from_stack(result.ciphers);
+
         if (result.cert) {
             X509_free(result.cert);
         }
+        if (result.ciphers) {
+            sk_SSL_CIPHER_free(result.ciphers);
+        }
     }
+
     cleanup_openssl();
     return EXIT_SUCCESS;
 }
