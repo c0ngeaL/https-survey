@@ -8,18 +8,13 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include "func.h"
+#include "common.h"
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <netdb.h>
 
 #define MAX_DOMAINS 256
 #define MAX_DOMAIN_LEN 253
-
-typedef struct {
-    char domains[MAX_DOMAINS][MAX_DOMAIN_LEN + 1];
-    int count;
-    int show_help;
-} Options;
 
 int is_valid_domain(const char *domain);
 void print_help(const char *program_name);
