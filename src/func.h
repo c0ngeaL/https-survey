@@ -25,14 +25,14 @@ typedef struct {
     TLSProtocolSupport protocol_support;
     STACK_OF(SSL_CIPHER) *ciphers;
     X509 *cert;
+    const char *error;
     SSL* ssl;
 } TLSCheckResult;
-
 void print_hex(const unsigned char *data, size_t len);
 void print_ciphers_from_stack(STACK_OF(SSL_CIPHER) *ciphers);
 void print_cert_info(X509 *cert);
 void print_protocol_support(TLSProtocolSupport *support);
-TLSCheckResult check_tls_server(const char *host, int port);
+void  check_tls_server(const char *host, int port, TLSCheckResult *result);
 void init_openssl();
 void cleanup_openssl();
 
