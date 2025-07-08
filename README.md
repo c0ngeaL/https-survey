@@ -29,4 +29,9 @@ Run:
 ```bash
 ./https-survey
 ```
+For test (lcov), run:
+```bash
+make test
+make coverage
+```
    
