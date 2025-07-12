@@ -1,10 +1,10 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -I./src -fprofile-arcs -ftest-coverage
 TARGET = https-survey
-TEST_TARGET = test_https_survey
+TEST_TARGET = https-survey
 SRCS = src/scanner.c src/func.c
 OBJS = $(SRCS:.c=.o)
-TEST_SRCS = test.c
+TEST_SRCS = test/test.c test/test-1.c
 TEST_OBJS = $(TEST_SRCS:.c=.o) src/scanner.o
 # is OpenSSL there?
 PKG_CONFIG := $(shell command -v pkg-config 2>/dev/null)
@@ -16,8 +16,8 @@ else
   SSL_H := $(shell find /usr/include /usr/local/include -name openssl/ssl.h 2>/dev/null | head -n1)
   ifneq ($(SSL_H),)
     CFLAGS += -I$(dir $(SSL_H))/..
-    LDFLAGS += -lssl -lcrypto -lresolv -lgcov
-    TEST_LDFLAGS += -lssl -lcrypto -lresolv -lgcov -lcheck
+  LDFLAGS = -lssl -lcrypto -lresolv -lgcov
+TEST_LDFLAGS = -lssl -lcrypto -lresolv -lgcov -lcheck -pthread
   else
     $(error "OpenSSL not found!")
   endif
