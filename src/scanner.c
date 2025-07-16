@@ -249,7 +249,7 @@ void process_domain(const char* domain) {
                vulnerable ? "\033[31mVULNERABLE\033[0m" : "\033[32mNot vulnerable\033[0m");
         print_cert_info(result.cert);
     }
-
+    log_scan_result(domain, &result);
     cleanup:
     /* Safe cleanup in correct order */
     if (result.cert) {
@@ -266,7 +266,7 @@ void process_domain(const char* domain) {
         result.ssl = NULL;
     }
 
-    log_scan_result(domain, &result);
+
 }
 int main(int argc, char **argv)
 {
