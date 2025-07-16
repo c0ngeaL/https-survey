@@ -31,7 +31,7 @@ Run:
 ```
 For test (lcov), run:
 ```bash
-make test
 make coverage
+make cov-report
 ```
    
