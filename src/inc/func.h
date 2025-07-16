@@ -18,7 +18,6 @@ typedef struct {
     char* name;
     int bits;
     char* version;
-    bool is_supported;
     bool is_rsa;
 } CipherInfo;
 
