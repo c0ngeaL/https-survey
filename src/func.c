@@ -15,6 +15,7 @@ static pthread_mutex_t list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static SSL_CTX* tls_ctx_cache[4] = {NULL};
 
 /* Initialize SSL context cache for different TLS versions */
+/* Initialize SSL context cache for different TLS versions */
 static pthread_mutex_t ctx_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void init_ctx_cache() {
@@ -490,17 +491,29 @@ void check_tls_server(const char* host, size_t port, TLSCheckResult* result) {
 
         // Attempt connection
         if (BIO_do_connect(bio) <= 0) {
+            unsigned long err = ERR_get_error();
             fprintf(stderr, "Connection failed for %s: ", protocols[i].name);
             ERR_print_errors_fp(stderr);
+
+            // Check for host resolution errors
+            if (err && ERR_GET_LIB(err) == ERR_LIB_BIO &&
+                ERR_GET_REASON(err) == BIO_RR_CONNECT) {
+                result->error = "Host resolution failed (non-existent domain)";
             BIO_free_all(bio);
             SSL_CTX_free(ctx);
-            continue;
+            return;
+                }
+
+                BIO_free_all(bio);
+                SSL_CTX_free(ctx);
+                continue;
         }
 
         // Get SSL object
         if (BIO_get_ssl(bio, &ssl) && ssl) {
             // Perform handshake
-            if (SSL_do_handshake(ssl) > 0) {
+            int handshake_result = SSL_do_handshake(ssl);
+            if (handshake_result > 0) {
                 // Success!
                 result->ciphers = SSL_get1_supported_ciphers(ssl);
                 result->cert = SSL_get_peer_certificate(ssl);
@@ -516,6 +529,15 @@ void check_tls_server(const char* host, size_t port, TLSCheckResult* result) {
 
                 // bio and ctx are now owned by SSL object
                 return;
+            } else {
+                // Check for host resolution errors during handshake
+                int ssl_error = SSL_get_error(ssl, handshake_result);
+                if (ssl_error == SSL_ERROR_SYSCALL) {
+                    result->error = "Connection failed (host unreachable)";
+                    BIO_free_all(bio);
+                    SSL_CTX_free(ctx);
+                    return;
+                }
             }
         }
 
@@ -525,7 +547,7 @@ void check_tls_server(const char* host, size_t port, TLSCheckResult* result) {
     }
 
     // If we get here, all attempts failed
-    result->error = "No supported protocol found";
-    if (bio) BIO_free_all(bio);
-    if (ctx) SSL_CTX_free(ctx);
+    if (!result->error) {
+        result->error = "No supported protocol found";
+    }
 }
