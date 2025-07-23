@@ -15,7 +15,6 @@ static pthread_mutex_t list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static SSL_CTX* tls_ctx_cache[4] = {NULL};
 
 /* Initialize SSL context cache for different TLS versions */
-/* Initialize SSL context cache for different TLS versions */
 static pthread_mutex_t ctx_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void init_ctx_cache() {
